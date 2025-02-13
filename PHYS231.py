@@ -1827,3 +1827,262 @@ def PendulumSim(alpha0):
     T = 2*t[i]
     display(Latex(r'$T = $ ' + '{0:.3f}'.format(T) + ' s'))
     display(Latex(r'$T_\mathrm{approx} = $ ' + '{0:.3f}'.format(Tapprox) + ' s'))
+
+
+
+
+###############################################################################
+# Weighted & Unweighted Lorentzian Fits                                       #
+# - modified 20221014                                                         #
+############################################################################### 
+# Start the 'Lorentz' function.
+def Lorentz(xData, yData, yErrors = [], start = [1, 220, 50], xlabel = 'x-axis', ylabel = 'y-axis', xUnits = '', yUnits = ''):
+    # Check to see if the elements of dataArray are numpy arrays.  If they are, convert to lists
+    A_fit = ''
+    w0_fit = ''
+    gamma_fit = ''
+    errA = ''
+    errw0 = ''
+    errgamma = ''
+    fig = ''
+    if  type(xData).__module__ == np.__name__:
+        xData = xData.tolist()
+    if  type(yData).__module__ == np.__name__:
+        yData = yData.tolist()
+    if  type(yErrors).__module__ == np.__name__:
+        yErrors = yErrors.tolist()
+    if  type(start).__module__ == np.__name__:
+        start = start.tolist()
+    # Check that the lengths of the inputs are all the same.  Check that the other inputs are strings.
+    if len(start) != 3:
+        display(html_print(cstr('The length of start (' + str(len(start)) + ') must be equal to 3.', color = 'magenta')))
+    if len(xData) != len(yData):
+        display(html_print(cstr('The length of xData (' + str(len(xData)) + ') is not equal to the length of yData (' + str(len(yData)) + ').', color = 'magenta')))
+    elif len(yErrors) != 0 and len(xData) != len(yErrors):  
+        display(html_print(cstr('The length of xData (' + str(len(xData)) + ') is not equal to the length of yErrors (' + str(len(yErrors)) + ').', color = 'magenta')))
+    elif len(yErrors) != 0 and len(yData) != len(yErrors):  
+        display(html_print(cstr('The length of yData (' + str(len(yData)) + ') is not equal to the length of yErrors (' + str(len(yErrors)) + ').', color = 'magenta')))
+    elif all(isinstance(x, (int, float)) for x in xData) != True:
+        display(html_print(cstr("The elements of 'xData' must be integers or floats.", color = 'magenta')))
+    elif all(isinstance(x, (int, float)) for x in yData) != True:
+        display(html_print(cstr("The elements of 'yData' must be integers or floats.", color = 'magenta')))
+    elif all(isinstance(x, (int, float)) for x in start) != True:
+        display(html_print(cstr("The elements of 'start' must be integers or floats.", color = 'magenta')))
+    elif len(yErrors) != 0 and all(isinstance(x, (int, float)) for x in yErrors) != True:
+        display(html_print(cstr("The elements of 'yErrors' must be integers or floats.", color = 'magenta')))
+    elif isinstance(xlabel, str) == False:
+        display(html_print(cstr("'xlabel' must be a string.", color = 'magenta')))
+    elif isinstance(ylabel, str) == False:
+        display(html_print(cstr("'ylabel' must be a string.", color = 'magenta')))
+    elif isinstance(xUnits, str) == False:
+        display(html_print(cstr("'xUnits' must be a string.", color = 'magenta')))
+    elif isinstance(yUnits, str) == False:
+        display(html_print(cstr("'yUnits' must be a string.", color = 'magenta')))
+    else:
+        # Uncertainties is a nice package that can be used to properly round
+        # a numerical value based on its associated uncertainty.
+        install_and_import('uncertainties') # check to see if uncertainties is installed.  If it isn't attempt to do the install
+        import uncertainties
+
+        # Define the linear function used for the fit.
+        def LorentzFcn(x, A, w0, gamma):
+            y = A/np.sqrt(1 + (x/gamma)**2*(1 - (w0/x)**2)**2)
+            return y
+        
+        # If the yErrors list is empty, do an unweighted fit.  Otherwise, do a weighted fit.
+        print('')
+        display(Markdown(r'$y = \dfrac{A}{\sqrt{1 + \left(\dfrac{\omega}{\gamma}\right)^2\left[1 - \left(\dfrac{\omega_0}{\omega}\right)^2\right]^2}}$'))
+    
+        if len(yErrors) == 0: 
+            a_fit, cov = curve_fit(LorentzFcn, xData, yData, p0 = start)
+            display(Markdown('This is an **UNWEIGHTED** fit.'))
+        else:
+            a_fit, cov = curve_fit(LorentzFcn, xData, yData, sigma = yErrors, p0 = start, absolute_sigma = True)
+            display(Markdown('This is a **WEIGHTED** fit.'))
+
+        A_fit = a_fit[0]
+        errA = np.sqrt(np.diag(cov))[0]
+        w0_fit = a_fit[1]
+        errw0 = np.sqrt(np.diag(cov))[1]
+        gamma_fit = a_fit[2]
+        errgamma = np.sqrt(np.diag(cov))[2]
+        
+        # Use the 'uncertainties' package to format the best-fit parameters and the corresponding uncertainties.
+        A = uncertainties.ufloat(A_fit, errA)
+        w0 = uncertainties.ufloat(w0_fit, errw0)
+        gamma = uncertainties.ufloat(gamma_fit, errgamma)
+
+        # Make a formatted table that reports the best-fit parameters and their uncertainties        
+        import pandas as pd
+        if xUnits != '' and yUnits != '':
+#            my_dict = {'coefficient' :{'':'$A =$', 'Value': '{:0.2ug}'.format(A), 'Units': yUnits + '/' + xUnits + eval(r'"\u00b' + str(Power) + '"')},
+#                       'power':{'':'$N =$', 'Value': '{:0.2ug}'.format(N), 'Units': ''},
+#                       'offset':{'':'$C =$', 'Value': '{:0.2ug}'.format(C), 'Units': yUnits}}
+            my_dict = {'amplitude' :{'':'$A =$', 'Value': '{:0.2ug}'.format(A), 'Units': yUnits},
+                       'angular resonance freuqnecy' :{'':'$\omega_0 =$', 'Value': '{:0.2ug}'.format(w0), 'Units': xUnits},
+                       'width' :{'':'$\gamma =$', 'Value': '{:0.2ug}'.format(gamma), 'Units': xUnits}}
+        elif xUnits != '' and yUnits == '':
+            my_dict = my_dict = {'amplitude' :{'':'$A =$', 'Value': '{:0.2ug}'.format(A), 'Units': yUnits},
+                       'angular resonance freuqnecy' :{'':'$\omega_0 =$', 'Value': '{:0.2ug}'.format(w0), 'Units': xUnits},
+                       'width' :{'':'$\gamma =$', 'Value': '{:0.2ug}'.format(gamma), 'Units': xUnits}}
+        elif xUnits == '' and yUnits != '':
+            my_dict = my_dict = {'amplitude' :{'':'$A =$', 'Value': '{:0.2ug}'.format(A), 'Units': yUnits},
+                       'angular resonance freuqnecy' :{'':'$\omega_0 =$', 'Value': '{:0.2ug}'.format(w0), 'Units': xUnits},
+                       'width' :{'':'$\gamma =$', 'Value': '{:0.2ug}'.format(gamma), 'Units': xUnits}}
+        else:
+            my_dict = my_dict = {'amplitude' :{'':'$A =$', 'Value': '{:0.2ug}'.format(A)},
+                       'angular resonance freuqnecy' :{'':'$\omega_0 =$', 'Value': '{:0.2ug}'.format(w0)},
+                       'width' :{'':'$\gamma =$', 'Value': '{:0.2ug}'.format(gamma)}}
+
+        # Display the table
+        df = pd.DataFrame(my_dict)
+        display(df.transpose())
+        
+        # Generate the best-fit line. 
+        #fitFcn = np.polynomial.Polynomial(a_fit)
+        
+        # Call the Scatter function to create a scatter plot.
+        fig = Scatter(xData, yData, yErrors, xlabel, ylabel, xUnits, yUnits, False, False)
+        
+        # Determine the x-range.  Used to determine the x-values needed to produce the best-fit line.
+        if np.min(xData) > 0:
+            xmin = 0.9*np.min(xData)
+        else:
+            xmin = 1.1*np.min(xData)
+        if np.max(xData) > 0:
+            xmax = 1.1*np.max(xData)
+        else:
+            xmax = 0.9*np.max(xData)
+
+        # Plot the best-fit line...
+        xx = np.arange(xmin, xmax, (xmax-xmin)/5000)
+
+        plt.plot(xx, A_fit/np.sqrt(1 + (xx/gamma_fit)**2*(1 - (w0_fit/xx)**2)**2), 'k-')
+
+        # Show the final plot.
+        plt.show()
+    return A_fit, w0_fit, gamma_fit, errA, errw0, errgamma, fig
+
+
+###############################################################################
+# Weighted & Unweighted Lorentzian Phase Fits                                 #
+# - modified 20221014                                                         #
+############################################################################### 
+# Start the 'Lorentz' function.
+def Phase(xData, yData, yErrors = [], start = [220, 50], xlabel = 'x-axis', ylabel = 'y-axis', xUnits = '', yUnits = ''):
+    # Check to see if the elements of dataArray are numpy arrays.  If they are, convert to lists
+    w0_fit = ''
+    gamma_fit = ''
+    errw0 = ''
+    errgamma = ''
+    fig = ''
+    if  type(xData).__module__ == np.__name__:
+        xData = xData.tolist()
+    if  type(yData).__module__ == np.__name__:
+        yData = yData.tolist()
+    if  type(yErrors).__module__ == np.__name__:
+        yErrors = yErrors.tolist()
+    if  type(start).__module__ == np.__name__:
+        start = start.tolist()   
+    # Check that the lengths of the inputs are all the same.  Check that the other inputs are strings.
+    if len(start) != 2:
+        display(html_print(cstr('The length of start (' + str(len(start)) + ') must be equal to 2', color = 'magenta')))
+    if len(xData) != len(yData):
+        display(html_print(cstr('The length of xData (' + str(len(xData)) + ') is not equal to the length of yData (' + str(len(yData)) + ').', color = 'magenta')))
+    elif len(yErrors) != 0 and len(xData) != len(yErrors):  
+        display(html_print(cstr('The length of xData (' + str(len(xData)) + ') is not equal to the length of yErrors (' + str(len(yErrors)) + ').', color = 'magenta')))
+    elif len(yErrors) != 0 and len(yData) != len(yErrors):  
+        display(html_print(cstr('The length of yData (' + str(len(yData)) + ') is not equal to the length of yErrors (' + str(len(yErrors)) + ').', color = 'magenta')))
+    elif all(isinstance(x, (int, float)) for x in xData) != True:
+        display(html_print(cstr("The elements of 'xData' must be integers or floats.", color = 'magenta')))
+    elif all(isinstance(x, (int, float)) for x in yData) != True:
+        display(html_print(cstr("The elements of 'yData' must be integers or floats.", color = 'magenta')))
+    elif all(isinstance(x, (int, float)) for x in start) != True:
+        display(html_print(cstr("The elements of 'start' must be integers or floats.", color = 'magenta')))
+    elif len(yErrors) != 0 and all(isinstance(x, (int, float)) for x in yErrors) != True:
+        display(html_print(cstr("The elements of 'yErrors' must be integers or floats.", color = 'magenta')))
+    elif isinstance(xlabel, str) == False:
+        display(html_print(cstr("'xlabel' must be a string.", color = 'magenta')))
+    elif isinstance(ylabel, str) == False:
+        display(html_print(cstr("'ylabel' must be a string.", color = 'magenta')))
+    elif isinstance(xUnits, str) == False:
+        display(html_print(cstr("'xUnits' must be a string.", color = 'magenta')))
+    elif isinstance(yUnits, str) == False:
+        display(html_print(cstr("'yUnits' must be a string.", color = 'magenta')))
+    else:
+        # Uncertainties is a nice package that can be used to properly round
+        # a numerical value based on its associated uncertainty.
+        install_and_import('uncertainties') # check to see if uncertainties is installed.  If it isn't attempt to do the install
+        import uncertainties
+
+        # Define the linear function used for the fit.
+        def LorentzFcn(x, w0, gamma):
+            y = np.arctan((x/gamma)*(1 - (w0/x)**2))
+            return y
+        
+        # If the yErrors list is empty, do an unweighted fit.  Otherwise, do a weighted fit.
+        print('')
+        display(Markdown(r'$y = \arctan\left\{\dfrac{\omega}{\gamma}\left[1 - \left(\dfrac{\omega_0}{\omega}\right)^2\right]\right\}$'))
+    
+        if len(yErrors) == 0: 
+            a_fit, cov = curve_fit(LorentzFcn, xData, yData, p0 = start)
+            display(Markdown('This is an **UNWEIGHTED** fit.'))
+        else:
+            a_fit, cov = curve_fit(LorentzFcn, xData, yData, sigma = yErrors, p0 = start, absolute_sigma = True)
+            display(Markdown('This is a **WEIGHTED** fit.'))
+
+        w0_fit = a_fit[0]
+        errw0 = np.sqrt(np.diag(cov))[0]
+        gamma_fit = a_fit[1]
+        errgamma = np.sqrt(np.diag(cov))[1]
+        
+        # Use the 'uncertainties' package to format the best-fit parameters and the corresponding uncertainties.
+        w0 = uncertainties.ufloat(w0_fit, errw0)
+        gamma = uncertainties.ufloat(gamma_fit, errgamma)
+
+        # Make a formatted table that reports the best-fit parameters and their uncertainties        
+        import pandas as pd
+        if xUnits != '' and yUnits != '':
+#            my_dict = {'coefficient' :{'':'$A =$', 'Value': '{:0.2ug}'.format(A), 'Units': yUnits + '/' + xUnits + eval(r'"\u00b' + str(Power) + '"')},
+#                       'power':{'':'$N =$', 'Value': '{:0.2ug}'.format(N), 'Units': ''},
+#                       'offset':{'':'$C =$', 'Value': '{:0.2ug}'.format(C), 'Units': yUnits}}
+            my_dict = {'angular resonance freuqnecy' :{'':'$\omega_0 =$', 'Value': '{:0.2ug}'.format(w0), 'Units': xUnits},
+                       'width' :{'':'$\gamma =$', 'Value': '{:0.2ug}'.format(gamma), 'Units': xUnits}}
+        elif xUnits != '' and yUnits == '':
+            my_dict = my_dict = {'angular resonance freuqnecy' :{'':'$\omega_0 =$', 'Value': '{:0.2ug}'.format(w0), 'Units': xUnits},
+                       'width' :{'':'$\gamma =$', 'Value': '{:0.2ug}'.format(gamma), 'Units': xUnits}}
+        elif xUnits == '' and yUnits != '':
+            my_dict = my_dict = {'angular resonance freuqnecy' :{'':'$\omega_0 =$', 'Value': '{:0.2ug}'.format(w0), 'Units': xUnits},
+                       'width' :{'':'$\gamma =$', 'Value': '{:0.2ug}'.format(gamma), 'Units': xUnits}}
+        else:
+            my_dict = my_dict = {'angular resonance freuqnecy' :{'':'$\omega_0 =$', 'Value': '{:0.2ug}'.format(w0)},
+                       'width' :{'':'$\gamma =$', 'Value': '{:0.2ug}'.format(gamma)}}
+
+        # Display the table
+        df = pd.DataFrame(my_dict)
+        display(df.transpose())
+        
+        # Generate the best-fit line. 
+        #fitFcn = np.polynomial.Polynomial(a_fit)
+        
+        # Call the Scatter function to create a scatter plot.
+        fig = Scatter(xData, yData, yErrors, xlabel, ylabel, xUnits, yUnits, False, False)
+        
+        # Determine the x-range.  Used to determine the x-values needed to produce the best-fit line.
+        if np.min(xData) > 0:
+            xmin = 0.9*np.min(xData)
+        else:
+            xmin = 1.1*np.min(xData)
+        if np.max(xData) > 0:
+            xmax = 1.1*np.max(xData)
+        else:
+            xmax = 0.9*np.max(xData)
+
+        # Plot the best-fit line...
+        xx = np.arange(xmin, xmax, (xmax-xmin)/5000)
+
+        plt.plot(xx, np.arctan((xx/gamma_fit)*(1 - (w0_fit/xx)**2)), 'k-')
+
+        # Show the final plot.
+        plt.show()
+    return w0_fit, gamma_fit, errw0, errgamma, fig
